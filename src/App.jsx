@@ -44,8 +44,8 @@ function App() {
       (Number(data.overhead.labourHour) * Number(data.overhead.labourHours) / Math.max(1, Number(data.overhead.batchSize)));
     const total = ingredientCost + overhead;
     const margin = Math.min(95, Math.max(0, Number(data.overhead.margin) || 0));
-    const price = total / (1 - margin / 100);
-    return { id:p.id, ingredientCost, overhead, total, price, suggested: Math.ceil(price/10)*10, missing };
+    const price = missing.length ? null : total / (1 - margin / 100);
+    return { id:p.id, ingredientCost, overhead, total, price, suggested: price === null ? null : Math.ceil(price/10)*10, missing };
   }), [data]);
   const changeProduct = (id, key, value) => update(d => { const p=d.products.find(x=>x.id===id); p[key]=value; return d; });
   const changeLine = (id, idx, key, value) => update(d => { const p=d.products.find(x=>x.id===id); p.lines[idx][key]=key==="qty" ? (value==="" ? "" : Number(value)) : value; return d; });
@@ -60,7 +60,7 @@ function App() {
       {tab==="products" && <section className="product-list">
         <div className="section-head"><div><p className="eyebrow">NINE VARIETIES</p><h2>Product costing</h2></div><span className="hint">Tap any quantity to edit</span></div>
         {data.products.map((p,i) => { const c=costs[i]; return <article className="product-card" key={p.id}>
-          <div className="product-head"><div><span className="product-index">0{p.id}</span><div className="product-name">{p.name}</div><div className="product-method">{p.method}</div></div><div className="price-pill"><small>Suggested price</small><strong>{money(c.suggested)}</strong></div></div>
+          <div className="product-head"><div><span className="product-index">0{p.id}</span><div className="product-name">{p.name}</div><div className="product-method">{p.method}</div></div><div className="price-pill"><small>Suggested price</small><strong>{c.suggested === null ? "Recipe needed" : money(c.suggested)}</strong></div></div>
           <label className="field-label">Product name</label><input className="name-input" value={p.name} onChange={e=>changeProduct(p.id,"name",e.target.value)}/>
           <div className="recipe-head"><span>INGREDIENT</span><span>QUANTITY</span><span>UNIT</span><span>COST</span></div>
           {p.lines.map((x,j)=> { const grams=x.unit==="ml" ? (Number(x.qty)||0)*Number(data.overhead.honeyDensity) : Number(x.qty)||0; const cost=grams*(Number(data.rates[x.ingredient])||0)/1000; return <div className="recipe-row" key={j}>
@@ -70,7 +70,7 @@ function App() {
             <span className="line-cost">{money(cost)}</span>
           </div>; })}
           <div className="cost-summary"><div><small>Ingredients</small><b>{money(c.ingredientCost)}</b></div><div><small>Overheads</small><b>{money(c.overhead)}</b></div><div><small>Full unit cost</small><b>{money(c.total)}</b></div></div>
-          <div className="price-footer"><span>Target margin {data.overhead.margin}%</span><strong>Suggested MRP {money(c.suggested)}</strong></div>
+          <div className="price-footer"><span>Target margin {data.overhead.margin}%</span><strong>{c.suggested === null ? "Complete recipe to price" : `Suggested MRP ${money(c.suggested)}`}</strong></div>
           {p.note && <p className="note">{p.note}</p>}
         </article>; })}
       </section>}
