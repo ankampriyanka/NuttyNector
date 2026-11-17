@@ -1,85 +1,112 @@
 import React, { useEffect, useMemo, useState } from "react";
 import "./styles.css";
 
-const initialRates = {
-  Almonds: 1360, Cashews: 1490, Walnuts: 2300, Pistachios: 3800,
-  "Pumpkin seeds": 990, "Sunflower seeds": 680, Cranberries: 990,
-  Blueberries: 2350, Honey: 800
+const starter = {
+  ingredients: [
+    { id: 1, name: "Almonds", rate: 1360, purchaseUnit: "kg", useUnit: "g" },
+    { id: 2, name: "Cashews", rate: 1490, purchaseUnit: "kg", useUnit: "g" },
+    { id: 3, name: "Walnuts", rate: 2300, purchaseUnit: "kg", useUnit: "g" },
+    { id: 4, name: "Pistachios", rate: 3800, purchaseUnit: "kg", useUnit: "g" },
+    { id: 5, name: "Honey", rate: 800, purchaseUnit: "kg", useUnit: "g" },
+    { id: 6, name: "Cranberries", rate: 990, purchaseUnit: "kg", useUnit: "g" },
+    { id: 7, name: "Blueberries", rate: 2350, purchaseUnit: "kg", useUnit: "g" },
+    { id: 8, name: "Packaging jar", rate: 50, purchaseUnit: "piece", useUnit: "piece" }
+  ],
+  overheads: [
+    { id: 1, name: "Label & printing", amount: 8, basis: "per item" },
+    { id: 2, name: "Logistics", amount: 500, basis: "per batch" },
+    { id: 3, name: "Labour", amount: 350, basis: "per batch" }
+  ],
+  batchSize: 20,
+  margin: 25,
+  rounding: 10,
+  products: [
+    { id: 1, name: "Almond Nector Crunch", sku: "NN-001", lines: [{ ingredientId: 1, qty: 200, unit: "g" }, { ingredientId: 5, qty: 63, unit: "g" }, { ingredientId: 8, qty: 1, unit: "piece" }] },
+    { id: 2, name: "Cashew Nector Crunch", sku: "NN-002", lines: [{ ingredientId: 2, qty: 200, unit: "g" }, { ingredientId: 5, qty: 63, unit: "g" }, { ingredientId: 8, qty: 1, unit: "piece" }] }
+  ]
 };
-const line = (ingredient, qty, unit = "g") => ({ ingredient, qty, unit });
-const initialProducts = [
-  { id: 1, name: "Almond Nector Crunch", collection: "Golden Collection", method: "Honey roasted & tossed", note: "200 g almonds + 3 tbsp honey (assumed 45 ml)", lines: [line("Almonds",200), line("Honey",45,"ml")] },
-  { id: 2, name: "Cashew Nector Crunch", collection: "Golden Collection", method: "Honey roasted & tossed", note: "200 g cashews + 3 tbsp honey (assumed 45 ml)", lines: [line("Cashews",200), line("Honey",45,"ml")] },
-  { id: 3, name: "Walnut Nector Crunch", collection: "Golden Collection", method: "Honey roasted & tossed", note: "200 g walnuts + 3 tbsp honey (assumed 45 ml)", lines: [line("Walnuts",200), line("Honey",45,"ml")] },
-  { id: 4, name: "Nector Medley Jar", collection: "Golden Collection", method: "Honey blend", note: "Honey is specified as 80 ml; nut and seed quantities are not yet supplied.", lines: [line("Almonds",0), line("Cashews",0), line("Pumpkin seeds",0), line("Sunflower seeds",0), line("Honey",80,"ml")] },
-  { id: 5, name: "Golden Bliss Jar – Almond", collection: "Golden Collection", method: "Honey immersed", note: "40 g almonds + 170 g honey", lines: [line("Almonds",40), line("Honey",170)] },
-  { id: 6, name: "Golden Bliss Jar – Cashew", collection: "Golden Collection", method: "Honey immersed", note: "40 g cashews + 170 g honey", lines: [line("Cashews",40), line("Honey",170)] },
-  { id: 7, name: "Golden Bliss Jar – Walnut", collection: "Golden Collection", method: "Honey immersed", note: "Your table says 40 g cashew although the product is named Walnut. Confirm before treating this as final.", lines: [line("Cashews",40), line("Honey",170)] },
-  { id: 8, name: "Nector Premium", collection: "Golden Collection", method: "Honey immersed", note: "50 g almonds + 50 g walnuts + 50 g cranberries + 50 ml honey", lines: [line("Almonds",50), line("Walnuts",50), line("Cranberries",50), line("Honey",50,"ml")] },
-  { id: 9, name: "Nector Royal", collection: "Golden Collection", method: "Honey immersed", note: "Ingredients and quantities conflict: listed ingredients include pista and blueberry, while quantities specify walnut and omit both.", lines: [line("Almonds",50), line("Walnuts",50), line("Cranberries",50), line("Pistachios",0), line("Blueberries",0), line("Honey",50,"ml")] }
-];
-const defaults = {
-  rates: initialRates, products: initialProducts,
-  overhead: { jar: 50, label: 8, logisticsBatch: 500, batchSize: 20, labourHour: 350, labourHours: 1, margin: 40, honeyDensity: 1.4 }
+const uid = () => Date.now() + Math.floor(Math.random() * 1000);
+const money = n => "₹" + (Number(n) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const unitCost = (item, qty) => {
+  const divisor = item.purchaseUnit === "kg" || item.purchaseUnit === "litre" ? 1000 : 1;
+  return (Number(item.rate) || 0) * (Number(qty) || 0) / divisor;
 };
-const money = n => "₹" + (Number.isFinite(n) ? n.toFixed(2) : "0.00");
 function App() {
   const [data, setData] = useState(() => {
-    try { const saved = localStorage.getItem("nutty-nectar-pricing-v1"); return saved ? JSON.parse(saved) : defaults; }
-    catch { return defaults; }
+    try { return JSON.parse(localStorage.getItem("nector-onestop-v1")) || starter; } catch { return starter; }
   });
-  const [tab, setTab] = useState("products");
-  useEffect(() => { localStorage.setItem("nutty-nectar-pricing-v1", JSON.stringify(data)); }, [data]);
-  const update = (fn) => setData(old => fn(structuredClone(old)));
+  const [tab, setTab] = useState("calculator");
+  const [newIngredient, setNewIngredient] = useState({ name: "", rate: "", purchaseUnit: "kg", useUnit: "g" });
+  const [newProduct, setNewProduct] = useState("");
+  useEffect(() => { localStorage.setItem("nector-onestop-v1", JSON.stringify(data)); }, [data]);
+  const update = fn => setData(old => fn(structuredClone(old)));
+  const ingredient = id => data.ingredients.find(x => x.id === Number(id));
   const costs = useMemo(() => data.products.map(p => {
-    let ingredientCost = 0, missing = [];
-    p.lines.forEach(x => {
-      const qty = Number(x.qty) || 0;
-      if (!qty) { if (x.ingredient !== "Honey" || p.id === 4 || p.id === 9) missing.push(x.ingredient); return; }
-      const grams = x.unit === "ml" ? qty * Number(data.overhead.honeyDensity) : qty;
-      ingredientCost += grams * (Number(data.rates[x.ingredient]) || 0) / 1000;
-    });
-    const overhead = Number(data.overhead.jar) + Number(data.overhead.label) +
-      (Number(data.overhead.logisticsBatch) / Math.max(1, Number(data.overhead.batchSize))) +
-      (Number(data.overhead.labourHour) * Number(data.overhead.labourHours) / Math.max(1, Number(data.overhead.batchSize)));
-    const total = ingredientCost + overhead;
-    const margin = Math.min(95, Math.max(0, Number(data.overhead.margin) || 0));
-    const price = missing.length ? null : total / (1 - margin / 100);
-    return { id:p.id, ingredientCost, overhead, total, price, suggested: price === null ? null : Math.ceil(price/10)*10, missing };
+    const ingredientTotal = p.lines.reduce((sum, l) => {
+      const item = data.ingredients.find(x => x.id === Number(l.ingredientId));
+      return sum + (item ? unitCost(item, l.qty) : 0);
+    }, 0);
+    const overheadPerItem = data.overheads.reduce((sum, h) => sum + (Number(h.amount) || 0) / (h.basis === "per batch" ? Math.max(1, Number(data.batchSize) || 1) : 1), 0);
+    const total = ingredientTotal + overheadPerItem;
+    const margin = Math.min(95, Math.max(0, Number(data.margin) || 0));
+    const exact = total / (1 - margin / 100);
+    const rounded = Math.ceil(exact / Math.max(1, Number(data.rounding) || 1)) * Math.max(1, Number(data.rounding) || 1);
+    return { ingredientTotal, overheadPerItem, total, exact, rounded, grossProfit: rounded - total, actualMargin: rounded ? (rounded - total) / rounded * 100 : 0 };
   }), [data]);
   const changeProduct = (id, key, value) => update(d => { const p=d.products.find(x=>x.id===id); p[key]=value; return d; });
-  const changeLine = (id, idx, key, value) => update(d => { const p=d.products.find(x=>x.id===id); p.lines[idx][key]=key==="qty" ? (value==="" ? "" : Number(value)) : value; return d; });
-  const changeRate = (name, value) => update(d => { d.rates[name]=Number(value)||0; return d; });
-  const changeOverhead = (name, value) => update(d => { d.overhead[name]=Number(value)||0; return d; });
-  const reset = () => { if (confirm("Reset all prices, recipes and assumptions to the original Nutty Nectar starting values?")) setData(defaults); };
-  return <div className="app-shell">
-    <header className="topbar"><div className="brand-mark">N<span>✦</span></div><div><div className="brand">NUTTY NECTAR</div><div className="tagline">SWEET. SPICY. CRUNCHY. YOURS.</div></div><div className="top-note">OWNER PRICING TOOL</div></header>
+  const changeLine = (pid, idx, key, value) => update(d => { const p=d.products.find(x=>x.id===pid); p.lines[idx][key]=key==="qty" ? (value === "" ? "" : Number(value)) : Number(value); return d; });
+  const addLine = pid => update(d => { const p=d.products.find(x=>x.id===pid); p.lines.push({ ingredientId:d.ingredients[0]?.id || 0, qty:0, unit:d.ingredients[0]?.useUnit || "g" }); return d; });
+  const removeLine = (pid, idx) => update(d => { d.products.find(x=>x.id===pid).lines.splice(idx,1); return d; });
+  const addProduct = () => { if (!newProduct.trim()) return; update(d => { d.products.push({ id:uid(), name:newProduct.trim(), sku:"", lines:[] }); return d; }); setNewProduct(""); };
+  const addIngredient = () => { if (!newIngredient.name.trim() || newIngredient.rate === "") return; update(d => { d.ingredients.push({ id:uid(), ...newIngredient, rate:Number(newIngredient.rate) }); return d; }); setNewIngredient({ name:"", rate:"", purchaseUnit:"kg", useUnit:"g" }); };
+  const updateIngredient = (id,key,value) => update(d => { const x=d.ingredients.find(i=>i.id===id); x[key]=key==="rate" ? Number(value)||0 : value; return d; });
+  const addOverhead = () => update(d => { d.overheads.push({ id:uid(), name:"New overhead", amount:0, basis:"per item" }); return d; });
+  const updateOverhead = (id,key,value) => update(d => { const x=d.overheads.find(i=>i.id===id); x[key]=key==="amount" ? Number(value)||0 : value; return d; });
+  const exportCsv = () => {
+    const rows = [["Product","Ingredient cost","Overhead per item","Total unit cost","Target margin %","Suggested selling price","Rounded gross margin %"]];
+    data.products.forEach((p,i)=>rows.push([p.name,costs[i].ingredientTotal.toFixed(2),costs[i].overheadPerItem.toFixed(2),costs[i].total.toFixed(2),data.margin,costs[i].rounded.toFixed(2),costs[i].actualMargin.toFixed(2)]));
+    const csv = rows.map(r=>r.map(v=>'"'+String(v).replaceAll('"','""')+'"').join(",")).join("\n");
+    const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"})); a.download="nector-pricing-summary.csv"; a.click(); URL.revokeObjectURL(a.href);
+  };
+  const reset = () => { if (window.confirm("Restore the starter data? Your current browser data will be replaced.")) setData(structuredClone(starter)); };
+  return <div className="shell">
+    <header className="topbar"><div className="logo">N<span>✦</span></div><div><div className="brand">NECTOR ONESTOP</div><div className="tagline">GROCERY • RECIPE • COST • PRICE</div></div><span className="private">PRIVATE BUSINESS TOOL</span></header>
     <main>
-      <section className="hero"><p className="eyebrow">SMALL BUSINESS CONTROL CENTRE</p><h1>Your recipes.<br/><em>Your prices.</em></h1><p>Update ingredient rates and recipe quantities to instantly recalculate your jar cost and suggested selling price.</p><div className="hero-chips"><span>● Live costing</span><span>● Mobile friendly</span><span>● Auto-saved on this device</span></div></section>
-      <nav className="tabs"><button className={tab==="products"?"active":""} onClick={()=>setTab("products")}>Products & prices</button><button className={tab==="rates"?"active":""} onClick={()=>setTab("rates")}>Ingredient rates</button><button className={tab==="overhead"?"active":""} onClick={()=>setTab("overhead")}>Business costs</button></nav>
-      {tab==="products" && <section className="product-list">
-        <div className="section-head"><div><p className="eyebrow">NINE VARIETIES</p><h2>Product costing</h2></div><span className="hint">Tap any quantity to edit</span></div>
-        {data.products.map((p,i) => { const c=costs[i]; return <article className="product-card" key={p.id}>
-          <div className="product-head"><div><span className="product-index">0{p.id}</span><div className="product-name">{p.name}</div><div className="product-method">{p.method}</div></div><div className="price-pill"><small>Suggested price</small><strong>{c.suggested === null ? "Recipe needed" : money(c.suggested)}</strong></div></div>
-          <label className="field-label">Product name</label><input className="name-input" value={p.name} onChange={e=>changeProduct(p.id,"name",e.target.value)}/>
-          <div className="recipe-head"><span>INGREDIENT</span><span>QUANTITY</span><span>UNIT</span><span>COST</span></div>
-          {p.lines.map((x,j)=> { const grams=x.unit==="ml" ? (Number(x.qty)||0)*Number(data.overhead.honeyDensity) : Number(x.qty)||0; const cost=grams*(Number(data.rates[x.ingredient])||0)/1000; return <div className="recipe-row" key={j}>
-            <select value={x.ingredient} onChange={e=>changeLine(p.id,j,"ingredient",e.target.value)}>{Object.keys(data.rates).map(k=><option key={k}>{k}</option>)}</select>
-            <input type="number" min="0" step="1" value={x.qty} onChange={e=>changeLine(p.id,j,"qty",e.target.value)} />
-            <select value={x.unit} onChange={e=>changeLine(p.id,j,"unit",e.target.value)}><option value="g">g</option><option value="ml">ml</option></select>
-            <span className="line-cost">{money(cost)}</span>
-          </div>; })}
-          <div className="cost-summary"><div><small>Ingredients</small><b>{money(c.ingredientCost)}</b></div><div><small>Overheads</small><b>{money(c.overhead)}</b></div><div><small>Full unit cost</small><b>{money(c.total)}</b></div></div>
-          <div className="price-footer"><span>Target margin {data.overhead.margin}%</span><strong>{c.suggested === null ? "Complete recipe to price" : `Suggested MRP ${money(c.suggested)}`}</strong></div>
-          {p.note && <p className="note">{p.note}</p>}
-        </article>; })}
+      <section className="hero"><div className="eyebrow">YOUR EVERYDAY COSTING COUNTER</div><h1>Know your cost.<br/><em>Set your price.</em></h1><p>Add any product, enter the ingredients and quantities, update supplier rates and overheads. Your unit cost and selling price recalculate instantly.</p><div className="chips"><span>Live calculator</span><span>Editable grocery list</span><span>Auto-saved on this device</span></div></section>
+      <nav className="tabs">{[["calculator","Product calculator"],["ingredients","Grocery / ingredients"],["overheads","Overheads & margin"]].map(([id,label])=><button key={id} className={tab===id?"active":""} onClick={()=>setTab(id)}>{label}</button>)}</nav>
+      {tab==="calculator" && <section>
+        <div className="section-title"><div><div className="eyebrow">PRODUCT WORKSHEET</div><h2>Cost & selling price</h2></div><button className="gold-btn" onClick={addProduct}>＋ Add product</button></div>
+        <div className="new-product"><input value={newProduct} onChange={e=>setNewProduct(e.target.value)} placeholder="Enter a new product name"/><button onClick={addProduct}>Create</button></div>
+        <div className="summary-strip"><div><small>Products</small><b>{data.products.length}</b></div><div><small>Target gross margin</small><b>{data.margin}%</b></div><div><small>Batch size</small><b>{data.batchSize} units</b></div></div>
+        {data.products.map((p,i)=>{const c=costs[i];return <article className="product" key={p.id}>
+          <div className="product-top"><div className="product-title"><span className="sku">{p.sku || "NEW ITEM"}</span><input value={p.name} onChange={e=>changeProduct(p.id,"name",e.target.value)} aria-label="Product name"/></div><div className="price"><small>SELLING PRICE</small><strong>{money(c.rounded)}</strong></div></div>
+          <div className="line-heading"><span>GROCERY ITEM</span><span>QTY</span><span>UNIT</span><span>LINE COST</span><span></span></div>
+          {p.lines.map((l,j)=>{const item=ingredient(l.ingredientId);return <div className="line" key={j}>
+            <select value={l.ingredientId} onChange={e=>changeLine(p.id,j,"ingredientId",e.target.value)}>{data.ingredients.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select>
+            <input type="number" min="0" step="any" value={l.qty} onChange={e=>changeLine(p.id,j,"qty",e.target.value)}/>
+            <span className="unit">{item?.useUnit || "—"}</span><b>{money(item?unitCost(item,l.qty):0)}</b><button className="remove" onClick={()=>removeLine(p.id,j)}>×</button>
+          </div>;})}
+          <div className="product-actions"><button onClick={()=>addLine(p.id)}>＋ Add grocery item</button><button className="delete" onClick={()=>update(d=>{d.products=d.products.filter(x=>x.id!==p.id);return d;})}>Remove product</button></div>
+          <div className="totals"><div><small>Ingredient cost</small><b>{money(c.ingredientTotal)}</b></div><div><small>Overhead / unit</small><b>{money(c.overheadPerItem)}</b></div><div><small>Full unit cost</small><b>{money(c.total)}</b></div><div className="highlight"><small>Gross profit / unit</small><b>{money(c.grossProfit)}</b></div></div>
+          <div className="bottom-price"><span>Target margin {data.margin}% · Rounded to nearest ₹{data.rounding} upward</span><strong>Recommended price {money(c.rounded)}</strong><small>Actual margin after rounding: {c.actualMargin.toFixed(1)}%</small></div>
+        </article>;})}
+        <div className="actions"><button className="gold-btn" onClick={exportCsv}>Export price summary (CSV)</button><button className="plain" onClick={()=>window.print()}>Print</button></div>
       </section>}
-      {tab==="rates" && <section className="panel"><p className="eyebrow">PURCHASE INPUTS</p><h2>Ingredient master</h2><p className="muted">Change a supplier rate per kilogram. Every product cost and suggested price updates immediately.</p><div className="rate-grid">{Object.entries(data.rates).map(([name,rate])=><label className="rate-row" key={name}><span>{name}</span><div><span>₹</span><input type="number" min="0" value={rate} onChange={e=>changeRate(name,e.target.value)}/><small>/ kg</small></div></label>)}</div></section>}
-      {tab==="overhead" && <section className="panel"><p className="eyebrow">RUNNING THE BUSINESS</p><h2>Unit cost assumptions</h2><p className="muted">These are editable starting assumptions from your earlier costing sheet. Replace them with actual supplier and production costs.</p><div className="rate-grid">
-        {[["jar","Jar / bottle cost (₹)"],["label","Label & printing per jar (₹)"],["logisticsBatch","Logistics per batch (₹)"],["batchSize","Jars produced per batch"],["labourHour","Labour cost per hour (₹)"],["labourHours","Labour hours per batch"],["margin","Target gross margin (%)"],["honeyDensity","Honey density (g/ml)"]].map(([key,label])=><label className="rate-row" key={key}><span>{label}</span><input type="number" min="0" step="0.1" value={data.overhead[key]} onChange={e=>changeOverhead(key,e.target.value)}/></label>)}
-      </div><div className="assumption-warning">Current defaults: ₹50 jar + ₹8 label, ₹500 logistics / 20 jars, 1 labour hour at ₹350, 40% gross margin. These assumptions may not match your final bottle or production setup.</div></section>}
-      <section className="actions"><button className="secondary" onClick={()=>window.print()}>Print price summary</button><button className="text-button" onClick={reset}>Reset starting data</button></section>
-      <footer><div className="brand">NUTTY NECTAR</div><p>Private business calculator · Your edits stay in this browser on this device.</p><p className="tiny">Important: 120 ml is a volume measurement, not a net weight. Confirm each filled recipe physically before fixing label weights or publishing prices. Honey density is an estimate for costing only.</p></footer>
+      {tab==="ingredients" && <section className="panel"><div className="eyebrow">GROCERY MASTER</div><h2>Items & purchase rates</h2><p className="muted">Maintain your grocery list here. Rates are entered per kg, litre or piece; recipe quantities use g, ml or piece.</p>
+        <div className="ingredient-table"><div className="table-head"><span>ITEM</span><span>PURCHASE RATE (₹)</span><span>BUY UNIT</span><span>RECIPE UNIT</span></div>
+          {data.ingredients.map(x=><div className="ingredient-row" key={x.id}><input value={x.name} onChange={e=>updateIngredient(x.id,"name",e.target.value)}/><input type="number" min="0" value={x.rate} onChange={e=>updateIngredient(x.id,"rate",e.target.value)}/><select value={x.purchaseUnit} onChange={e=>updateIngredient(x.id,"purchaseUnit",e.target.value)}><option value="kg">per kg</option><option value="litre">per litre</option><option value="piece">per piece</option></select><select value={x.useUnit} onChange={e=>updateIngredient(x.id,"useUnit",e.target.value)}><option value="g">g</option><option value="ml">ml</option><option value="piece">piece</option></select></div>)}
+        </div>
+        <div className="add-ingredient"><h3>Add a grocery item</h3><div className="add-grid"><input placeholder="Item name" value={newIngredient.name} onChange={e=>setNewIngredient({...newIngredient,name:e.target.value})}/><input type="number" placeholder="Purchase rate ₹" value={newIngredient.rate} onChange={e=>setNewIngredient({...newIngredient,rate:e.target.value})}/><select value={newIngredient.purchaseUnit} onChange={e=>setNewIngredient({...newIngredient,purchaseUnit:e.target.value,useUnit:e.target.value==="kg"?"g":e.target.value==="litre"?"ml":"piece"})}><option value="kg">per kg</option><option value="litre">per litre</option><option value="piece">per piece</option></select><button onClick={addIngredient}>＋ Add item</button></div></div>
+      </section>}
+      {tab==="overheads" && <section className="panel"><div className="eyebrow">BUSINESS COST SETTINGS</div><h2>Overheads & margin</h2><p className="muted">Add packaging, labour, transport, utilities, platform fees or any other cost. Choose whether the amount applies per item or per production batch.</p>
+        <label className="setting"><span>Units produced in one batch</span><input type="number" min="1" value={data.batchSize} onChange={e=>update(d=>{d.batchSize=Math.max(1,Number(e.target.value)||1);return d;})}/></label>
+        <label className="setting"><span>Target gross margin (%)</span><input type="number" min="0" max="95" value={data.margin} onChange={e=>update(d=>{d.margin=Math.min(95,Math.max(0,Number(e.target.value)||0));return d;})}/></label>
+        <label className="setting"><span>Price rounding (₹)</span><select value={data.rounding} onChange={e=>update(d=>{d.rounding=Number(e.target.value);return d;})}><option value="1">₹1</option><option value="5">₹5</option><option value="10">₹10</option><option value="50">₹50</option></select></label>
+        <div className="overhead-list">{data.overheads.map(h=><div className="overhead-row" key={h.id}><input value={h.name} onChange={e=>updateOverhead(h.id,"name",e.target.value)}/><span>₹</span><input type="number" min="0" value={h.amount} onChange={e=>updateOverhead(h.id,"amount",e.target.value)}/><select value={h.basis} onChange={e=>updateOverhead(h.id,"basis",e.target.value)}><option value="per item">per item</option><option value="per batch">per batch</option></select><button className="remove" onClick={()=>update(d=>{d.overheads=d.overheads.filter(x=>x.id!==h.id);return d;})}>×</button></div>)}</div>
+        <button className="gold-btn" onClick={addOverhead}>＋ Add overhead</button>
+        <div className="formula"><b>Pricing formula</b><p>Selling price = (ingredient cost + overhead per unit) ÷ (1 − target gross margin)</p><small>Gross margin is calculated on selling price, not as a markup on cost.</small></div>
+      </section>}
+      <footer><div className="brand">NECTOR ONESTOP</div><p>Grocery-to-selling-price calculator · Private workspace</p><p className="tiny">Your edits are saved in this browser on this device. This version does not sync across devices or users. For liquids, use a matching purchase and recipe unit (litre → ml); do not mix incompatible units. Review supplier rates and actual production costs before finalising prices.</p><button className="plain" onClick={reset}>Reset starter data</button></footer>
     </main>
   </div>;
 }
